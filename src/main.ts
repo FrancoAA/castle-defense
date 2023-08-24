@@ -1,9 +1,17 @@
-import kaboom from "kaboom";
+import kaboom, { GameObj } from "kaboom";
 
 const ENEMY_SPEED = 100;
+const SWORD_DMG = 2;
+const SWORD_COOLDOWN = 0.5;
+let SWORD_CAN_ATTACK = true;
+const GUN_DMG = 1;
+const GUN_COOLDOWN = 0.2;
+let GUN_CAN_ATTACK = true;
 const MIN_DIST = 600;
 
 const k = kaboom();
+
+let currentWeapon = 'sword';
 
 k.loadRoot("sprites/");
 k.loadSprite("apple", "apple.png");
@@ -11,6 +19,8 @@ k.loadSprite("bean", "bean.png");
 k.loadSprite("coin", "coin.png");
 k.loadSprite("ghosty", "ghosty.png");
 k.loadSprite("gigagantrum", "gigagantrum.png");
+k.loadSprite("sword", "sword.png");
+k.loadSprite("gun", "gun.png");
 
 function grow(rate) {
   return {
@@ -76,18 +86,20 @@ function randomPos() {
 
 function spawnEnemy() {
   const enemyLevel = Math.floor(k.rand(1, 5));
-  const enemyMinSpeed = ENEMY_SPEED * (1 / enemyLevel);
+  const enemySpeed = k.rand(ENEMY_SPEED * (1 / enemyLevel), ENEMY_SPEED);
+  const enemyPos = randomPos();
 
   const enemy = k.add([
     enemyLevel >= 4 ? k.sprite("gigagantrum") : k.sprite("ghosty"),
     k.health(enemyLevel),
-    k.pos(randomPos()),
+    k.pos(enemyPos),
     k.area(),
+    k.move(player.pos.sub(enemyPos).unit(), enemySpeed),
     healthBar(),
     "enemy",
     {
       level: enemyLevel,
-      speed: k.rand(enemyMinSpeed, ENEMY_SPEED),
+      speed: enemySpeed,
     },
   ]);
 
@@ -112,17 +124,14 @@ function addExplode(p, n, rad, size) {
   }
 }
 
-const scoreLabel = k.add([
-  k.text("Score: 0"),
+const infoLabel = k.add([
+  k.text("Score: 0\nCombo: x0"),
   k.pos(10, 10),
   k.color(k.BLACK),
-  { value: 0 },
-]);
-const comboLabel = k.add([
-  k.text("Combo: x0"),
-  k.pos(10, 40),
-  k.color(k.BLACK),
-  { value: 1 },
+  { 
+    score: 0,
+    combo: 0,
+  },
 ]);
 
 const player = k.add([
@@ -134,45 +143,78 @@ const player = k.add([
   "player",
 ]);
 
+const swordCursor = k.add([
+  k.pos(k.mousePos()),
+  k.sprite("sword"),
+  k.z(100),
+  k.scale(0.5),
+  k.rotate(-45),
+  'cursor',
+  'sword',
+]);
+
+const gunCursor = k.add([
+  k.pos(k.mousePos()),
+  k.anchor('topright'),
+  k.sprite("gun"),
+  k.z(100),
+  k.scale(0.5),
+  'cursor',
+  'gun',
+]);
+
 k.onUpdate(() => {
-  scoreLabel.text = `Score: ${scoreLabel.value}`;
-  comboLabel.text = `Combo: x${comboLabel.value}`;
-
-  const enemies = k.get("enemy");
-
-  enemies.forEach((e) => {
-    const dir = player.pos.sub(e.pos).unit();
-    e.move(dir.scale(e.speed));
-  });
-});
-
-k.onHover("enemy", (e) => {
-  k.setCursor("pointer");
-});
-
-k.onHoverEnd("enemy", (e) => {
-  k.setCursor("default");
+  infoLabel.text = `
+  Score: ${infoLabel.score}\n
+  Combo: x${infoLabel.combo}\n
+  Weapon: ${currentWeapon}
+  `;
+  
+  k.setCursor('none');
+  if (currentWeapon === 'sword') {
+    gunCursor.hidden = true;
+    swordCursor.hidden = false;
+    swordCursor.pos = k.mousePos();
+  } else {
+    swordCursor.hidden = true;
+    gunCursor.hidden = false;
+    gunCursor.pos = k.mousePos();
+  }
 });
 
 k.onCollide("enemy", "player", (e) => {
-  comboLabel.value = 0;
+  infoLabel.combo = 0;
   player.hurt(1);
   k.shake(3);
   k.destroy(e);
 });
 
-k.onClick("enemy", (e) => {
-  e.hurt(1);
+k.onClick((btn) => {
+  if (btn !== 'right') return;
+  currentWeapon = currentWeapon === 'sword' ? 'gun' : 'sword';
 });
 
-k.on("hurt", "enemy", (e) => {
-  scoreLabel.value += 100 * (comboLabel.value * 0.1 || 1);
+k.onClick("enemy", (e) => {
+  if (currentWeapon === 'sword' && SWORD_CAN_ATTACK) {
+    e.hurt(SWORD_DMG);
+    addExplode(k.mousePos(), 1, 24, 0.5);
+    SWORD_CAN_ATTACK = false;
+    k.wait(SWORD_COOLDOWN, () => SWORD_CAN_ATTACK = true);
+  } else if (currentWeapon === 'gun' && GUN_CAN_ATTACK) {
+    e.hurt(GUN_DMG);
+    addExplode(k.mousePos(), 1, 24, 0.5);
+    GUN_CAN_ATTACK = false;
+    k.wait(GUN_COOLDOWN, () => GUN_CAN_ATTACK = true);
+  }
+});
+
+k.on("hurt", "enemy", () => {
+  infoLabel.score += 100 * (infoLabel.combo * 0.1 || 1);
   k.shake(1);
-  addExplode(e.pos, 1, 24, 0.5);
 });
 
 k.on("death", "enemy", (e) => {
-  comboLabel.value += 1;
+  infoLabel.combo += 1;
   k.setCursor("default");
   k.destroy(e);
 });
