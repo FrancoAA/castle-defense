@@ -1,6 +1,24 @@
 import kaboom, { GameObj } from "kaboom";
 
 const ENEMY_SPEED = 100;
+const ENEMY_ATTACK_DMG = 1;
+const ENEMY_TYPES = {
+  "ghosty": {
+    speed: ENEMY_SPEED,
+    attack: 1,
+    health: 1,
+  },
+  "dino": {
+    speed: ENEMY_SPEED * 0.75,
+    attack: 1,
+    health: 1,
+  },
+  "gigagantrum": {
+    speed: ENEMY_SPEED * 0.5,
+    attack: 1,
+    health: 1,
+  },
+};
 const SWORD_DMG = 2;
 const SWORD_COOLDOWN = 0.5;
 let SWORD_CAN_ATTACK = true;
@@ -18,6 +36,7 @@ k.loadSprite("apple", "apple.png");
 k.loadSprite("bean", "bean.png");
 k.loadSprite("coin", "coin.png");
 k.loadSprite("ghosty", "ghosty.png");
+k.loadSprite("dino", "dino.png");
 k.loadSprite("gigagantrum", "gigagantrum.png");
 k.loadSprite("sword", "sword.png");
 k.loadSprite("gun", "gun.png");
@@ -85,21 +104,25 @@ function randomPos() {
 }
 
 function spawnEnemy() {
-  const enemyLevel = Math.floor(k.rand(1, 5));
-  const enemySpeed = k.rand(ENEMY_SPEED * (1 / enemyLevel), ENEMY_SPEED);
-  const enemyPos = randomPos();
+  const type = k.choose(Object.keys(ENEMY_TYPES));
+  const baseStats = ENEMY_TYPES[type];
+  const level = Math.floor(k.rand(1, 5));
+  const speed = k.rand(baseStats.speed * (1 / level), baseStats.speed);
+  const attack = (baseStats.attack + (level * 0.1));
+  const pos = randomPos();
 
   const enemy = k.add([
-    enemyLevel >= 4 ? k.sprite("gigagantrum") : k.sprite("ghosty"),
-    k.health(enemyLevel),
-    k.pos(enemyPos),
+    k.sprite(type),
+    k.health(level),
+    k.pos(pos),
     k.area(),
-    k.move(player.pos.sub(enemyPos).unit(), enemySpeed),
+    k.move(player.pos.sub(pos).unit(), speed),
     healthBar(),
     "enemy",
     {
-      level: enemyLevel,
-      speed: enemySpeed,
+      level,
+      attack,
+      speed,
     },
   ]);
 
